@@ -84,7 +84,7 @@ pip install numpy matplotlib pyyaml
 ## Run Experiments
 
 ```bash
-python /home/runner/work/moea-drone-swarm/moea-drone-swarm/experiments/run_experiments.py
+python experiments/run_experiments.py
 ```
 
 Outputs are written to `results/` (configurable):
@@ -96,7 +96,7 @@ Outputs are written to `results/` (configurable):
 
 ## Configuration
 
-Edit `/home/runner/work/moea-drone-swarm/moea-drone-swarm/experiments/configs.yaml`:
+Edit `experiments/configs.yaml`:
 
 - Number of runs (default `30`)
 - Random seeds for reproducibility
@@ -109,7 +109,7 @@ Edit `/home/runner/work/moea-drone-swarm/moea-drone-swarm/experiments/configs.ya
 Run unit tests:
 
 ```bash
-python -m unittest discover -s /home/runner/work/moea-drone-swarm/moea-drone-swarm/tests -q
+python -m unittest discover -s tests -q
 ```
 
 ## Notes

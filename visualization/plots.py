@@ -5,18 +5,26 @@ from __future__ import annotations
 from typing import Dict, Sequence
 
 import matplotlib.pyplot as plt
+from simulation.environment import CircleObstacle
 
 
-def plot_pareto(fronts: Dict[str, Sequence[Sequence[float]]], out_path: str) -> None:
+def plot_pareto(
+    fronts: Dict[str, Sequence[Sequence[float]]],
+    out_path: str,
+    x_obj: int = 0,
+    y_obj: int = 2,
+    x_label: str = "Total Path Length",
+    y_label: str = "Total Energy",
+) -> None:
     plt.figure(figsize=(7, 5))
     for name, front in fronts.items():
         if not front:
             continue
-        x = [f[0] for f in front]
-        y = [f[2] for f in front]
+        x = [f[x_obj] for f in front]
+        y = [f[y_obj] for f in front]
         plt.scatter(x, y, s=24, label=name, alpha=0.8)
-    plt.xlabel("Total Path Length")
-    plt.ylabel("Total Energy")
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
     plt.title("Pareto Front Comparison")
     plt.legend()
     plt.tight_layout()
@@ -39,7 +47,7 @@ def plot_convergence(histories: Dict[str, Sequence[dict]], out_path: str) -> Non
     plt.close()
 
 
-def plot_paths(paths: Sequence[Sequence[tuple]], obstacles: Sequence[object], out_path: str) -> None:
+def plot_paths(paths: Sequence[Sequence[tuple]], obstacles: Sequence[CircleObstacle], out_path: str) -> None:
     plt.figure(figsize=(7, 7))
     for path in paths:
         x = [p[0] for p in path]

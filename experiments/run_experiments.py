@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 from statistics import mean
-from typing import Dict, List
+from typing import Dict, List, Sequence
 
 from algorithms.moead import MOEAD, MOEADConfig
 from algorithms.nsga2 import NSGA2, NSGA2Config
@@ -63,6 +63,21 @@ def build_problem(cfg: dict) -> SwarmPathPlanningProblem:
     return SwarmPathPlanningProblem(drones=drones, environment=env, energy_model=energy_model, config=problem_cfg)
 
 
+def non_dominated(front: Sequence[Sequence[float]]) -> List[List[float]]:
+    nd = []
+    for i, p in enumerate(front):
+        dominated = False
+        for j, q in enumerate(front):
+            if i == j:
+                continue
+            if all(q[k] <= p[k] for k in range(len(p))) and any(q[k] < p[k] for k in range(len(p))):
+                dominated = True
+                break
+        if not dominated:
+            nd.append(list(p))
+    return nd
+
+
 def run() -> None:
     root = Path(__file__).resolve().parent
     cfg = load_config(str(root / "configs.yaml"))
@@ -80,11 +95,13 @@ def run() -> None:
     }
 
     all_results: Dict[str, List[dict]] = {name: [] for name in alg_constructors}
+    run_fronts: Dict[str, List[List[List[float]]]] = {name: [] for name in alg_constructors}
     all_fronts: Dict[str, List[List[float]]] = {name: [] for name in alg_constructors}
+    best_front_hv: Dict[str, float] = {name: float("-inf") for name in alg_constructors}
     histories = {}
+    problem = build_problem(cfg)
 
     for run_id in range(runs):
-        problem = build_problem(cfg)
         ref_point = [500.0, 80.0, 150000.0, 20.0]
 
         for name, ctor in alg_constructors.items():
@@ -95,11 +112,17 @@ def run() -> None:
             hv = hypervolume(front, ref_point, samples=5000, seed=seed + run_id)
             div = pure_diversity(front)
             delta = spread_delta(front)
-            igd_val = igd(front, front)
-
-            all_results[name].append({"hv": hv, "pd": div, "delta": delta, "igd": igd_val})
-            all_fronts[name] = front
+            all_results[name].append({"hv": hv, "pd": div, "delta": delta})
+            run_fronts[name].append([list(p) for p in front])
+            if hv > best_front_hv[name]:
+                best_front_hv[name] = hv
+                all_fronts[name] = [list(p) for p in front]
             histories[name] = result.history
+
+    reference_front = non_dominated([p for fronts in run_fronts.values() for front in fronts for p in front])
+    for name in all_results:
+        for i in range(len(all_results[name])):
+            all_results[name][i]["igd"] = igd(run_fronts[name][i], reference_front)
 
     summary = {}
     for name, records in all_results.items():
@@ -114,7 +137,9 @@ def run() -> None:
     for name in summary:
         if name == baseline_name:
             continue
-        summary[name]["hv_improvement_over_baseline_%"] = improvement_rate(summary[name]["hv_mean"], summary[baseline_name]["hv_mean"])
+        summary[name]["hv_improvement_over_baseline_pct"] = improvement_rate(
+            summary[name]["hv_mean"], summary[baseline_name]["hv_mean"], maximize=True
+        )
         stat = wilcoxon_rank_sum([r["hv"] for r in all_results[name]], [r["hv"] for r in all_results[baseline_name]])
         summary[name]["wilcoxon_p"] = stat["p_value"]
 

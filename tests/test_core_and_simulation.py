@@ -19,6 +19,8 @@ class CoreAndSimulationTests(unittest.TestCase):
         self.assertTrue(env.segment_collides((45, 50), (55, 50)))
         adj = env.communication_adjacency([(0, 0), (5, 0), (20, 0)], [10, 10, 10])
         self.assertFalse(env.is_graph_connected(adj))
+        adj_connected = env.communication_adjacency([(0, 0), (4, 0), (8, 0)], [10, 10, 10])
+        self.assertTrue(env.is_graph_connected(adj_connected))
 
     def test_problem_evaluate_outputs_objectives(self):
         drones = [

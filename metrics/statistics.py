@@ -38,9 +38,11 @@ def wilcoxon_rank_sum(sample_a: Sequence[float], sample_b: Sequence[float]) -> D
     return {"u": u1, "z": z, "p_value": p_value}
 
 
-def improvement_rate(candidate: float, baseline: float) -> float:
+def improvement_rate(candidate: float, baseline: float, maximize: bool = False) -> float:
     if baseline == 0:
         return 0.0
+    if maximize:
+        return (candidate - baseline) / abs(baseline) * 100.0
     return (baseline - candidate) / abs(baseline) * 100.0
 
 

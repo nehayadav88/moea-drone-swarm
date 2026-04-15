@@ -137,7 +137,7 @@ class SwarmPathPlanningProblem:
             sampled = self.environment.sample_path(path, samples_per_segment=6)
             sampled_paths.append(sampled)
 
-        max_steps = max((len(p) for p in sampled_paths), default=0)
+        max_steps = max([len(p) for p in sampled_paths], default=0)
         aligned = [p + [p[-1]] * (max_steps - len(p)) for p in sampled_paths if p]
 
         for t in range(max_steps):
