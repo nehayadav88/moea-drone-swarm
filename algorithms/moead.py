@@ -153,12 +153,13 @@ class MOEAD(MOEABase):
         # --- Weight vectors & neighbourhoods ---
         self.weights, actual_size = self._generate_weight_vectors(
             self.pop_size, self.n_obj)
+        requested_size = self.pop_size
         self.pop_size = actual_size
         self.neighborhoods = self._compute_neighborhoods(
             self.weights, self.n_neighbors)
 
         print(f"MOEA/D  weight vectors generated: {actual_size}  "
-              f"(requested {actual_size}),  "
+              f"(requested {requested_size}),  "
               f"neighbourhood size: {self.n_neighbors}")
 
         # --- Initialise population (one solution per weight vector) ---

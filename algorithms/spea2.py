@@ -105,7 +105,8 @@ class SPEA2(MOEABase):
         )
         # Sort distances; column 0 is self (distance 0)
         sorted_dists = np.sort(dists, axis=1)
-        sigma_k = sorted_dists[:, k]  # k-th nearest (0-indexed, col 0 = self)
+        # col 0 = self (distance 0), so col k = k-th nearest neighbour
+        sigma_k = sorted_dists[:, k]
 
         density = 1.0 / (sigma_k + 2.0)
         return density
