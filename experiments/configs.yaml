@@ -1,0 +1,57 @@
+# Experiment Configuration for MOEA Drone Swarm Path Planning
+# =============================================================
+
+environment:
+  width: 100.0
+  height: 100.0
+  n_static_obstacles: 15
+  n_dynamic_obstacles: 5
+  obstacle_min_radius: 1.5
+  obstacle_max_radius: 5.0
+
+swarm:
+  n_drones: 5
+  # Heterogeneous parameters are auto-generated
+  # Override specific drones if needed
+
+problem:
+  num_waypoints_per_drone: 5
+  safety_distance: 3.0
+
+algorithms:
+  nsga2:
+    pop_size: 100
+    n_gen: 150
+    crossover_eta: 20
+    mutation_eta: 20
+    crossover_prob: 0.9
+  moead:
+    pop_size: 105  # Will be adjusted to nearest valid weight vector count
+    n_gen: 150
+    n_neighbors: 20
+    crossover_eta: 20
+    mutation_eta: 20
+  spea2:
+    pop_size: 100
+    archive_size: 100
+    n_gen: 150
+    crossover_eta: 20
+    mutation_eta: 20
+
+experiment:
+  n_runs: 5  # Set to 30 for publication-quality results
+  base_seed: 42
+  output_dir: "results"
+  save_pareto_fronts: true
+  save_convergence: true
+  save_paths: true
+
+metrics:
+  reference_point: [500.0, 100.0, 5000.0, 100.0]  # For hypervolume computation
+  # Adjust based on problem scale
+
+scalability_test:
+  drone_counts: [3, 5, 10, 15, 20]
+  n_runs_per_count: 3
+  n_gen: 100
+  pop_size: 100
