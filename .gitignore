@@ -1,2 +1,7 @@
-core/__pycache__/
 __pycache__/
+*.pyc
+results/
+*.egg-info/
+.eggs/
+dist/
+build/

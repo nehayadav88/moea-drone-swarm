@@ -22,7 +22,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simulation.environment import Environment
 from simulation.drone import Drone
 from core.problem_definition import DroneSwarmMOP
-from core.energy_model import EnergyModel
 from algorithms.nsga2 import NSGA2
 from algorithms.moead import MOEAD
 from algorithms.spea2 import SPEA2
@@ -46,6 +45,20 @@ def load_config(config_path):
     return config
 
 
+def _drone_to_dict(drone):
+    """Convert a Drone object to the dict format expected by DroneSwarmMOP."""
+    return {
+        "start": tuple(drone.start_position),
+        "target": tuple(drone.target_position),
+        "mass": drone.mass,
+        "payload": drone.payload,
+        "speed": drone.max_speed,
+        "battery_capacity": drone.battery_capacity,
+        "comm_range": drone.comm_range,
+        "drone_radius": drone.drone_radius,
+    }
+
+
 def setup_problem(config, seed=None):
     """Create environment, drones, and problem instance."""
     env_cfg = config['environment']
@@ -67,13 +80,17 @@ def setup_problem(config, seed=None):
     )
 
     prob_cfg = config['problem']
-    energy_model = EnergyModel()
+    drone_dicts = [_drone_to_dict(d) for d in drones]
+    task_positions = [(d.target_position[0], d.target_position[1]) for d in drones]
+
     problem = DroneSwarmMOP(
         environment=env,
-        drones=drones,
-        energy_model=energy_model,
-        num_waypoints_per_drone=prob_cfg['num_waypoints_per_drone'],
-        safety_distance=prob_cfg.get('safety_distance', 3.0)
+        drones=drone_dicts,
+        task_positions=task_positions,
+        config={
+            "num_waypoints_per_drone": prob_cfg['num_waypoints_per_drone'],
+            "safety_distance": prob_cfg.get('safety_distance', 3.0),
+        },
     )
 
     return env, drones, problem
@@ -222,11 +239,15 @@ def run_experiments(config_path, quick=False):
             print(format_results_table(stats))
 
             if len(metric_data) > 1 and all(len(v) >= 2 for v in metric_data.values()):
-                comparisons = pairwise_comparison(metric_data)
+                comparison = pairwise_comparison(metric_data)
+                algo_names = comparison['algorithms']
+                p_vals = comparison['p_values']
+                syms = comparison['symbols']
                 print("\nPairwise Wilcoxon test p-values:")
-                for (a1, a2), info in comparisons.items():
-                    print(f"  {a1} vs {a2}: p={info['p_value']:.4f} "
-                          f"({'significant' if info['significant'] else 'not significant'})")
+                for i in range(len(algo_names)):
+                    for j in range(i + 1, len(algo_names)):
+                        print(f"  {algo_names[i]} vs {algo_names[j]}: "
+                              f"p={p_vals[i, j]:.4f} [{syms[i][j]}]")
 
     # ---- Visualization ----
     print(f"\n{'='*60}")
@@ -249,17 +270,23 @@ def run_experiments(config_path, quick=False):
         save_path=os.path.join(viz_dir, 'pareto_front.png')
     )
 
-    # Convergence curves (HV from last run)
+    # Convergence curves (best mean objective values from history)
     conv_dict = {}
     for algo_name in all_results:
         history = all_results[algo_name][-1]['history']
-        if 'hv' in history and len(history['hv']) > 0:
-            conv_dict[algo_name.upper()] = history['hv']
+        if 'objectives' in history and len(history['objectives']) > 0:
+            # Track mean of first objective (path length) per generation
+            mean_obj1 = []
+            for gen_obj in history['objectives']:
+                if len(gen_obj) > 0:
+                    mean_obj1.append(float(np.mean(gen_obj[:, 0])))
+            if mean_obj1:
+                conv_dict[algo_name.upper()] = mean_obj1
 
     if conv_dict:
         plot_convergence(
             conv_dict,
-            metric_name='Hypervolume',
+            metric_name='Mean Path Length (Front)',
             title='Convergence Comparison',
             save_path=os.path.join(viz_dir, 'convergence.png')
         )
@@ -285,14 +312,7 @@ def run_experiments(config_path, quick=False):
     if len(last_result['solutions']) > 0:
         best_sol = last_result['solutions'][0]
         drone_paths = problem.decode_solution(best_sol)
-        paths_dict = {}
-        for i, (drone, waypoints) in enumerate(zip(drones, drone_paths)):
-            full_path = np.vstack([
-                drone.start_position.reshape(1, -1),
-                waypoints,
-                drone.target_position.reshape(1, -1)
-            ])
-            paths_dict[i] = full_path
+        paths_dict = {i: path for i, path in enumerate(drone_paths)}
 
         plot_drone_paths(
             env, drones, paths_dict,

@@ -84,11 +84,11 @@ def _hv_2d(pareto_front, reference_point):
 
 
 def _hv_recursive(pareto_front, reference_point):
-    """Recursive hypervolume computation for general dimensions.
+    """Hypervolume computation for general dimensions.
 
-    Uses a dimension-sweep approach: sort by the last objective, then
-    reduce the problem to (n-1)-dimensional sub-problems by sweeping
-    a plane through the last coordinate.
+    For small fronts (≤ 8 points) uses exact inclusion-exclusion.
+    For larger fronts with 3+ objectives uses Monte Carlo estimation
+    for computational tractability.
 
     Parameters
     ----------
@@ -100,7 +100,7 @@ def _hv_recursive(pareto_front, reference_point):
     Returns
     -------
     float
-        Hypervolume value.
+        Hypervolume value (exact for small fronts, estimated for large).
     """
     n_points, n_obj = pareto_front.shape
 
@@ -116,40 +116,53 @@ def _hv_recursive(pareto_front, reference_point):
     if n_points == 1:
         return float(np.prod(reference_point - pareto_front[0]))
 
-    # Use inclusion-exclusion for small dimensions (up to 4 objectives)
-    if n_obj <= 4 and n_points <= 100:
+    # Use exact inclusion-exclusion for very small fronts
+    if n_points <= 8:
         return _hv_inclusion_exclusion(pareto_front, reference_point)
 
-    # Dimension sweep: sort by last objective
-    last_dim = n_obj - 1
-    sorted_indices = np.argsort(pareto_front[:, last_dim])
-    front = pareto_front[sorted_indices]
+    # For larger fronts with 3+ objectives, use Monte Carlo estimation
+    return _hv_monte_carlo(pareto_front, reference_point)
 
-    hv = 0.0
-    prev_last = reference_point[last_dim]
 
-    # Collect non-dominated points in the (n-1)-D projection seen so far
-    seen_points = []
+def _hv_monte_carlo(pareto_front, reference_point, n_samples=100000):
+    """Monte Carlo hypervolume estimation for higher dimensions.
 
-    for i in range(len(front) - 1, -1, -1):
-        slab_height = prev_last - front[i, last_dim]
-        if slab_height <= 0:
-            prev_last = front[i, last_dim]
-            seen_points.append(front[i, :last_dim])
-            continue
+    Samples random points in the bounding box [ideal, reference] and
+    counts the fraction dominated by at least one Pareto front member.
 
-        seen_points.append(front[i, :last_dim])
-        projected = np.array(seen_points)
+    Parameters
+    ----------
+    pareto_front : numpy.ndarray
+        Array of shape (n_points, n_obj).
+    reference_point : numpy.ndarray
+        Array of shape (n_obj,).
+    n_samples : int
+        Number of Monte Carlo samples.
 
-        # Remove dominated points in the (n-1)-D projection
-        projected = _filter_dominated(projected)
+    Returns
+    -------
+    float
+        Estimated hypervolume value.
+    """
+    n_points, n_obj = pareto_front.shape
+    ideal = np.min(pareto_front, axis=0)
 
-        sub_ref = reference_point[:last_dim]
-        sub_hv = _hv_recursive(projected, sub_ref)
-        hv += slab_height * sub_hv
-        prev_last = front[i, last_dim]
+    # Total bounding-box volume
+    box_vol = float(np.prod(reference_point - ideal))
+    if box_vol <= 0:
+        return 0.0
 
-    return float(hv)
+    rng = np.random.default_rng(0)
+    samples = rng.uniform(ideal, reference_point, size=(n_samples, n_obj))
+
+    # A sample is dominated if there exists at least one front point
+    # that is <= the sample in every objective.
+    dominated = np.zeros(n_samples, dtype=bool)
+    for p in pareto_front:
+        dominated |= np.all(samples >= p, axis=1)
+
+    fraction = np.mean(dominated)
+    return box_vol * fraction
 
 
 def _hv_inclusion_exclusion(pareto_front, reference_point):
