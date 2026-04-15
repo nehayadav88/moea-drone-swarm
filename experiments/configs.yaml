@@ -1,0 +1,61 @@
+experiment:
+  runs: 30
+  seed: 42
+  output_dir: results
+
+environment:
+  bounds: [0.0, 0.0, 100.0, 100.0]
+  static_circles:
+    - center: [30.0, 30.0]
+      radius: 8.0
+    - center: [70.0, 65.0]
+      radius: 7.0
+  dynamic_circles:
+    - center: [50.0, 50.0]
+      radius: 5.0
+      velocity: [0.05, -0.03]
+
+drones:
+  - start: [5.0, 5.0]
+    goal: [95.0, 95.0]
+    battery_capacity: 25000
+    speed: 14
+    sensing_range: 15
+    payload: 1.2
+    mass: 2.5
+    comm_range: 35
+  - start: [10.0, 90.0]
+    goal: [90.0, 10.0]
+    battery_capacity: 22000
+    speed: 12
+    sensing_range: 14
+    payload: 0.9
+    mass: 2.1
+    comm_range: 33
+  - start: [90.0, 20.0]
+    goal: [20.0, 90.0]
+    battery_capacity: 26000
+    speed: 11
+    sensing_range: 16
+    payload: 1.5
+    mass: 2.8
+    comm_range: 30
+
+problem:
+  waypoints_per_drone: 5
+  min_connectivity_ratio: 0.85
+  safety_distance: 4.0
+  required_tasks: 0
+
+algorithms:
+  nsga2:
+    population_size: 80
+    generations: 60
+  moead:
+    population_size: 80
+    generations: 60
+    neighborhood_size: 12
+  spea2:
+    population_size: 80
+    archive_size: 80
+    generations: 60
