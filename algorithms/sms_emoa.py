@@ -192,7 +192,7 @@ class SMSEMOA(MOEABase):
             c1, _c2 = self.sbx_crossover(p1, p2, eta=self.crossover_eta)
             offspring = self.polynomial_mutation(c1, eta=self.mutation_eta)
             offspring = np.clip(offspring, self.lower, self.upper)
-            off_obj = self.problem.evaluate(offspring)
+            off_obj = np.asarray(self.problem.evaluate(offspring), dtype=np.float64)
 
             # --- Add offspring (pop_size → pop_size + 1) ---
             pop = np.vstack([pop, offspring.reshape(1, -1)])

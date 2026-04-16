@@ -1,6 +1,6 @@
 # MOEA Drone Swarm Path Planning Framework
 
-A research-grade Python framework for **multi-objective optimization of heterogeneous drone swarm path planning**. Implements NSGA-II, MOEA/D, and SPEA2 algorithms from scratch with comprehensive performance metrics and visualization.
+A research-grade Python framework for **multi-objective optimization of heterogeneous drone swarm path planning**. Implements **11 algorithms inspired by PlatEMO** from scratch, with both 2-D and 3-D simulation environments, comprehensive performance metrics, and visualization.
 
 ## Overview
 
@@ -19,11 +19,14 @@ Subject to constraints:
 ## Features
 
 - **Heterogeneous drones** with varying battery, speed, sensing range, payload, and mass
+- **2-D and 3-D environments** with static and dynamic obstacles
+- **8 predefined 3-D test scenarios** (urban canyon, dense forest, corridor, etc.)
 - **Realistic energy model** with distance, hovering, turning, payload, and aerodynamic drag components
-- **Three MOEA implementations from scratch**: NSGA-II, MOEA/D (Tchebycheff), SPEA2
+- **11 MOEA implementations from scratch** (inspired by PlatEMO):
+  - NSGA-II, NSGA-III, MOEA/D, SPEA2, MOPSO, RVEA, IBEA, GDE3, SMS-EMOA, AGE-MOEA, HypE
 - **Comprehensive metrics**: Hypervolume, IGD, GD, Spread, Spacing, Pure Diversity
 - **Statistical analysis**: Wilcoxon rank-sum tests, improvement rates, comparison tables
-- **Rich visualization**: Pareto fronts, convergence curves, drone path plots, box plots, heatmaps
+- **Rich visualization**: Pareto fronts, convergence curves, 2-D/3-D drone path plots, box plots, heatmaps
 - **Configurable experiments** via YAML configuration
 - **Modular architecture** for easy extension
 
@@ -32,28 +35,38 @@ Subject to constraints:
 ```
 moea-drone-swarm/
 ├── core/
-│   ├── energy_model.py      # Realistic energy consumption model
-│   ├── problem_definition.py # Multi-objective problem formulation
-│   └── constraints.py        # Constraint checking utilities
+│   ├── energy_model.py        # Realistic energy consumption model (2D + 3D)
+│   ├── problem_definition.py  # DroneSwarmMOP (2D) + DroneSwarmMOP3D (3D)
+│   └── constraints.py         # Collision, energy, communication constraints
 ├── algorithms/
-│   ├── base.py               # Abstract MOEA base class
-│   ├── nsga2.py              # NSGA-II implementation
-│   ├── moead.py              # MOEA/D (Tchebycheff) implementation
-│   └── spea2.py              # SPEA2 implementation
+│   ├── base.py                # Abstract MOEA base class (SBX, polynomial mutation, NDS)
+│   ├── nsga2.py               # NSGA-II (Deb et al., 2002)
+│   ├── nsga3.py               # NSGA-III (Deb & Jain, 2014)
+│   ├── moead.py               # MOEA/D Tchebycheff (Zhang & Li, 2007)
+│   ├── spea2.py               # SPEA2 (Zitzler et al., 2001)
+│   ├── mopso.py               # MOPSO (Coello Coello et al., 2004)
+│   ├── rvea.py                # RVEA (Cheng et al., 2016)
+│   ├── ibea.py                # IBEA (Zitzler & Künzli, 2004)
+│   ├── gde3.py                # GDE3 (Kukkonen & Lampinen, 2005)
+│   ├── sms_emoa.py            # SMS-EMOA (Beume et al., 2007)
+│   ├── age_moea.py            # AGE-MOEA (Panichella, 2019)
+│   └── hype.py                # HypE (Bader & Zitzler, 2011)
 ├── simulation/
-│   ├── environment.py        # 2D environment with obstacles
-│   ├── drone.py              # Heterogeneous drone model
-│   └── path_planner.py       # Path utilities and feasibility
+│   ├── environment.py         # 2D environment with circular obstacles
+│   ├── environment3d.py       # 3D environment with spherical obstacles
+│   ├── drone.py               # Heterogeneous drone model
+│   ├── path_planner.py        # Path utilities and feasibility
+│   └── scenarios.py           # 8 predefined 3D test scenarios
 ├── metrics/
-│   ├── hv.py                 # Hypervolume indicator
-│   ├── igd.py                # IGD, IGD+, GD
-│   ├── diversity.py          # Spread, Spacing, Pure Diversity
-│   └── statistics.py         # Statistical tests and analysis
+│   ├── hv.py                  # Hypervolume indicator
+│   ├── igd.py                 # IGD, IGD+, GD
+│   ├── diversity.py           # Spread, Spacing, Pure Diversity
+│   └── statistics.py          # Wilcoxon rank-sum, comparison tables
 ├── visualization/
-│   └── plots.py              # All plotting functions
+│   └── plots.py               # Pareto fronts, convergence, 2D/3D paths, box plots
 ├── experiments/
-│   ├── configs.yaml          # Experiment configuration
-│   └── run_experiments.py    # Main experiment runner
+│   ├── configs.yaml           # Experiment configuration (all 11 algorithms)
+│   └── run_experiments.py     # Main experiment runner
 ├── requirements.txt
 └── README.md
 ```
@@ -80,13 +93,21 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-### Run a Quick Test
+### Run a Quick Test (2-D)
 
 ```bash
 python -m experiments.run_experiments --quick
 ```
 
-This runs a reduced experiment (2 runs, 30 generations) to verify everything works.
+This runs a reduced experiment (2 runs, 30 generations) with all 11 algorithms.
+
+### Run a 3-D Scenario
+
+```bash
+python -m experiments.run_experiments --scenario urban_canyon --quick
+```
+
+Available 3-D scenarios: `urban_canyon`, `dense_forest`, `open_field`, `corridor`, `multi_layer`, `search_and_rescue`, `high_density`, `custom`.
 
 ### Run Full Experiments
 
@@ -114,14 +135,40 @@ problem:
   num_waypoints_per_drone: 5  # Intermediate waypoints per drone
   safety_distance: 3.0        # Safety margin around obstacles
 
+# Comment out algorithms you don't want to run
 algorithms:
   nsga2:
     pop_size: 100
     n_gen: 150
+  nsga3:
+    pop_size: 100
+    n_gen: 150
+    n_partitions: 12
   moead:
     pop_size: 105
     n_gen: 150
   spea2:
+    pop_size: 100
+    n_gen: 150
+  mopso:
+    pop_size: 100
+    n_gen: 150
+  rvea:
+    pop_size: 100
+    n_gen: 150
+  ibea:
+    pop_size: 100
+    n_gen: 150
+  gde3:
+    pop_size: 100
+    n_gen: 150
+  sms_emoa:
+    pop_size: 100
+    n_gen: 150
+  age_moea:
+    pop_size: 100
+    n_gen: 150
+  hype:
     pop_size: 100
     n_gen: 150
 
@@ -182,6 +229,51 @@ Full path: [start_d] → [x₁,y₁] → ... → [x_W,y_W] → [target_d]
 - g₂: No path-obstacle intersections
 - g₃: Communication graph connectivity at each waypoint step
 
+## Algorithms (Inspired by PlatEMO)
+
+All 11 algorithms are implemented from scratch following the `MOEABase` interface:
+
+| Algorithm | Reference | Key Feature |
+|-----------|-----------|-------------|
+| NSGA-II   | Deb et al., 2002 | Crowding distance selection |
+| NSGA-III  | Deb & Jain, 2014 | Das-Dennis reference points |
+| MOEA/D    | Zhang & Li, 2007 | Tchebycheff decomposition |
+| SPEA2     | Zitzler et al., 2001 | Strength-based fitness + archive |
+| MOPSO     | Coello Coello et al., 2004 | Particle swarm + grid archive |
+| RVEA      | Cheng et al., 2016 | Angle-penalized distance |
+| IBEA      | Zitzler & Künzli, 2004 | Epsilon indicator fitness |
+| GDE3      | Kukkonen & Lampinen, 2005 | Differential evolution |
+| SMS-EMOA  | Beume et al., 2007 | Hypervolume contribution |
+| AGE-MOEA  | Panichella, 2019 | Adaptive geometry estimation |
+| HypE      | Bader & Zitzler, 2011 | Monte Carlo HV estimation |
+
+## 3-D Test Scenarios
+
+Use `--scenario` to run with predefined 3-D environments:
+
+| Scenario | Description | Drones | Obstacles |
+|----------|-------------|--------|-----------|
+| `urban_canyon` | Tall building-like columns | 8 | ~56 |
+| `dense_forest` | Many small tree-like obstacles | 5 | 30-50 |
+| `open_field` | Large area, few scattered obstacles | 10 | ~8 |
+| `corridor` | Narrow passage with wall obstacles | 4 | ~30 |
+| `multi_layer` | Obstacles at ground/mid/high altitudes | 8 | ~30 |
+| `search_and_rescue` | Large area, scattered obstacles | 12 | ~20 |
+| `high_density` | Stress test with many drones | 20 | ~40 |
+| `custom` | User-configurable via kwargs | configurable | configurable |
+
+```python
+from simulation.scenarios import create_scenario, list_scenarios
+
+# List all available scenarios
+print(list_scenarios())
+
+# Create a specific scenario
+env, drones = create_scenario("urban_canyon", seed=42)
+print(f"Environment: {env.width}x{env.height}x{env.depth}")
+print(f"Drones: {len(drones)}, Obstacles: {len(env.obstacles)}")
+```
+
 ## Extending the Framework
 
 ### Adding a New Algorithm
@@ -189,7 +281,8 @@ Full path: [start_d] → [x₁,y₁] → ... → [x_W,y_W] → [target_d]
 1. Create `algorithms/my_algo.py`
 2. Inherit from `MOEABase`
 3. Implement the `run()` method
-4. Add to `algorithm_map` in `run_experiments.py`
+4. Add to `ALGORITHM_REGISTRY` in `algorithms/__init__.py`
+5. Add config entry in `experiments/configs.yaml`
 
 ### Adding New Objectives
 
@@ -199,7 +292,7 @@ Full path: [start_d] → [x₁,y₁] → ... → [x_W,y_W] → [target_d]
 
 ### Scaling to More Drones
 
-Set `n_drones` in config. The framework supports 20+ drones but computation time scales with swarm size. Consider reducing `n_gen` or `pop_size` for larger swarms.
+Set `n_drones` in config. The framework supports 20+ drones but computation time scales with swarm size. Consider reducing `n_gen` or `pop_size` for larger swarms. Use the `high_density` 3-D scenario for stress testing.
 
 ## Citation
 
