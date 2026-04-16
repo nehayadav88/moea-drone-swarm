@@ -144,10 +144,12 @@ class EnergyModel:
     def compute_path_energy(self, waypoints, drone_params):
         """Compute total energy consumption for a drone following a path.
 
+        Works for both 2-D and 3-D waypoints.
+
         Parameters
         ----------
-        waypoints : array-like, shape (N, 2)
-            Ordered 2D waypoints (including start and target).
+        waypoints : array-like, shape (N, D) where D is 2 or 3
+            Ordered waypoints (including start and target).
         drone_params : dict
             Must contain:
 
@@ -176,14 +178,22 @@ class EnergyModel:
         # Segment vectors and distances
         segments = np.diff(waypoints, axis=0)
         seg_lengths = np.linalg.norm(segments, axis=1)
-        total_distance = np.sum(seg_lengths)
+        total_distance = float(np.sum(seg_lengths))
 
-        # Heading angles and turning costs
-        angles = np.arctan2(segments[:, 1], segments[:, 0])
-        if len(angles) >= 2:
-            raw_diffs = np.diff(angles)
-            # Wrap to [-pi, pi]
-            angle_changes = (raw_diffs + np.pi) % (2 * np.pi) - np.pi
+        # Turning angles (dimension-agnostic via dot-product)
+        if len(segments) >= 2:
+            angle_changes = np.empty(len(segments) - 1, dtype=np.float64)
+            for k in range(len(segments) - 1):
+                v1 = segments[k]
+                v2 = segments[k + 1]
+                n1 = np.linalg.norm(v1)
+                n2 = np.linalg.norm(v2)
+                if n1 < 1e-12 or n2 < 1e-12:
+                    angle_changes[k] = 0.0
+                else:
+                    cos_a = np.dot(v1, v2) / (n1 * n2)
+                    cos_a = np.clip(cos_a, -1.0, 1.0)
+                    angle_changes[k] = np.arccos(cos_a)
         else:
             angle_changes = np.array([], dtype=np.float64)
 

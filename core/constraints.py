@@ -1,8 +1,9 @@
 """Constraint handling utilities for drone swarm path planning.
 
 Provides functions for collision detection, energy feasibility checks,
-communication connectivity verification, and safety penalty computation.
-All geometric computations use numpy for efficiency.
+communication connectivity verification, and safety penalty computation
+for both 2-D and 3-D environments.  All geometric computations use numpy
+for efficiency.
 """
 
 import numpy as np
@@ -197,6 +198,122 @@ def compute_safety_penalty(waypoints, obstacles, safety_distance=2.0):
         p2 = waypoints[i + 1]
         for cx, cy, r in obstacles:
             dist = line_segment_circle_distance(p1, p2, np.array([cx, cy]), r)
+            if dist < safety_distance:
+                penalty += safety_distance - dist
+
+    return penalty
+
+
+# =====================================================================
+# 3-D variants (spherical obstacles)
+# =====================================================================
+
+
+def line_segment_sphere_distance(p1, p2, center, radius):
+    """Compute minimum distance from a 3-D line segment to a sphere boundary.
+
+    Parameters
+    ----------
+    p1 : array-like, shape (3,)
+        Segment start.
+    p2 : array-like, shape (3,)
+        Segment end.
+    center : array-like, shape (3,)
+        Sphere centre.
+    radius : float
+        Sphere radius.
+
+    Returns
+    -------
+    float
+        Minimum distance (0 if the segment intersects the sphere).
+    """
+    p1 = np.asarray(p1, dtype=np.float64)
+    p2 = np.asarray(p2, dtype=np.float64)
+    center = np.asarray(center, dtype=np.float64)
+
+    d = p2 - p1
+    f = p1 - center
+    seg_len_sq = np.dot(d, d)
+
+    if seg_len_sq < 1e-12:
+        dist_to_center = np.linalg.norm(p1 - center)
+        return max(0.0, dist_to_center - radius)
+
+    t = -np.dot(f, d) / seg_len_sq
+    t = np.clip(t, 0.0, 1.0)
+
+    closest = p1 + t * d
+    dist_to_center = np.linalg.norm(closest - center)
+    return max(0.0, dist_to_center - radius)
+
+
+def check_path_collision_3d(waypoints, obstacles, drone_radius=0.5):
+    """Check if a 3-D path collides with any spherical obstacle.
+
+    Parameters
+    ----------
+    waypoints : array-like, shape (N, 3)
+        Ordered 3-D waypoints.
+    obstacles : list of tuple
+        ``(cx, cy, cz, radius)`` for each spherical obstacle.
+    drone_radius : float, optional
+        Effective collision radius of the drone (default 0.5).
+
+    Returns
+    -------
+    has_collision : bool
+    num_collisions : int
+    """
+    waypoints = np.asarray(waypoints, dtype=np.float64)
+    if len(waypoints) < 2 or len(obstacles) == 0:
+        return False, 0
+
+    num_collisions = 0
+    for i in range(len(waypoints) - 1):
+        p1 = waypoints[i]
+        p2 = waypoints[i + 1]
+        for obs in obstacles:
+            cx, cy, cz, r = obs[0], obs[1], obs[2], obs[3]
+            dist = line_segment_sphere_distance(
+                p1, p2, np.array([cx, cy, cz]), r
+            )
+            if dist <= drone_radius:
+                num_collisions += 1
+
+    return num_collisions > 0, num_collisions
+
+
+def compute_safety_penalty_3d(waypoints, obstacles, safety_distance=2.0):
+    """Compute safety penalty for 3-D paths near spherical obstacles.
+
+    Parameters
+    ----------
+    waypoints : array-like, shape (N, 3)
+        Ordered 3-D waypoints.
+    obstacles : list of tuple
+        ``(cx, cy, cz, radius)`` for each obstacle.
+    safety_distance : float, optional
+        Minimum desired clearance (default 2.0).
+
+    Returns
+    -------
+    float
+        Total accumulated safety penalty.
+    """
+    waypoints = np.asarray(waypoints, dtype=np.float64)
+    if len(waypoints) < 2 or len(obstacles) == 0:
+        return 0.0
+
+    penalty = 0.0
+    for i in range(len(waypoints) - 1):
+        p1 = waypoints[i]
+        p2 = waypoints[i + 1]
+        for obs in obstacles:
+            cx, cy, cz, r = obs[0], obs[1], obs[2], obs[3]
+            dist = line_segment_sphere_distance(
+                p1, p2, np.array([cx, cy, cz]), r
+            )
             if dist < safety_distance:
                 penalty += safety_distance - dist
 

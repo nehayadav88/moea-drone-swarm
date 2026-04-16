@@ -229,30 +229,47 @@ def plot_drone_paths(
 ) -> None:
     """Plot drone flight paths inside an environment with obstacles.
 
+    Automatically chooses 2-D or 3-D visualisation based on the
+    dimensionality of the first path in *paths_dict*.
+
     Args:
-        environment: An :class:`Environment` instance (must expose
-            ``get_obstacle_positions()``, ``width``, and ``height``).
+        environment: An :class:`Environment` or :class:`Environment3D`.
         drones: Iterable of :class:`Drone` objects (used for IDs).
-        paths_dict: Mapping *drone_id* → ``(n, 2)`` array of (x, y)
-            waypoints describing the flight path.
+        paths_dict: Mapping *drone_id* → ``(n, 2)`` or ``(n, 3)`` array
+            of waypoints describing the flight path.
         title: Figure title.
         save_path: If provided the figure is written to this path.
     """
     if not paths_dict:
         return
 
+    # Auto-detect dimensionality.
+    first_path = np.asarray(next(iter(paths_dict.values())))
+    if first_path.ndim == 2 and first_path.shape[1] >= 3:
+        _plot_drone_paths_3d(environment, drones, paths_dict, title, save_path)
+    else:
+        _plot_drone_paths_2d(environment, drones, paths_dict, title, save_path)
+
+
+def _plot_drone_paths_2d(
+    environment,
+    drones,
+    paths_dict: Dict[int, np.ndarray],
+    title: str = "Drone Paths",
+    save_path: Optional[str] = None,
+) -> None:
+    """2-D drone path visualisation (original behaviour)."""
     fig, ax = plt.subplots(figsize=(10, 10))
 
     # Draw obstacles as filled grey circles.
     if environment is not None:
-        for cx, cy, r in environment.get_obstacle_positions():
+        for obs in environment.get_obstacle_positions():
+            cx, cy = obs[0], obs[1]
+            r = obs[2]
             circle = Circle(
                 (cx, cy), r, color="gray", alpha=0.5, zorder=1
             )
             ax.add_patch(circle)
-
-    # Build drone-id lookup for labelling.
-    drone_id_set = {d.drone_id for d in drones} if drones else set()
 
     for idx, (drone_id, path) in enumerate(paths_dict.items()):
         path = np.asarray(path)
@@ -260,47 +277,19 @@ def plot_drone_paths(
             continue
         color = _get_color(idx)
 
-        # Flight path line.
         ax.plot(
-            path[:, 0],
-            path[:, 1],
-            color=color,
-            linewidth=1.5,
-            alpha=0.8,
-            zorder=2,
+            path[:, 0], path[:, 1],
+            color=color, linewidth=1.5, alpha=0.8, zorder=2,
             label=f"Drone {drone_id}",
         )
-        # Start marker (green circle).
-        ax.plot(
-            path[0, 0],
-            path[0, 1],
-            "o",
-            color="green",
-            markersize=8,
-            zorder=3,
-        )
-        # End marker (red X).
-        ax.plot(
-            path[-1, 0],
-            path[-1, 1],
-            "X",
-            color="red",
-            markersize=10,
-            zorder=3,
-        )
-        # Drone ID label at start position.
+        ax.plot(path[0, 0], path[0, 1], "o", color="green", markersize=8, zorder=3)
+        ax.plot(path[-1, 0], path[-1, 1], "X", color="red", markersize=10, zorder=3)
         ax.annotate(
-            str(drone_id),
-            xy=(path[0, 0], path[0, 1]),
-            xytext=(5, 5),
-            textcoords="offset points",
-            fontsize=8,
-            fontweight="bold",
-            color=color,
-            zorder=4,
+            str(drone_id), xy=(path[0, 0], path[0, 1]),
+            xytext=(5, 5), textcoords="offset points",
+            fontsize=8, fontweight="bold", color=color, zorder=4,
         )
 
-    # Axis limits from environment bounds.
     if environment is not None:
         ax.set_xlim(0, environment.width)
         ax.set_ylim(0, environment.height)
@@ -311,6 +300,56 @@ def plot_drone_paths(
     ax.set_title(title)
     ax.legend(loc="upper right", fontsize=7, ncol=2)
     ax.grid(True, alpha=0.2)
+    _save_and_close(fig, save_path)
+
+
+def _plot_drone_paths_3d(
+    environment,
+    drones,
+    paths_dict: Dict[int, np.ndarray],
+    title: str = "Drone Paths (3D)",
+    save_path: Optional[str] = None,
+) -> None:
+    """3-D drone path visualisation with spherical obstacles."""
+    fig = plt.figure(figsize=(12, 10))
+    ax = fig.add_subplot(111, projection="3d")
+
+    # Draw obstacles as wireframe spheres (subset for performance).
+    if environment is not None:
+        obstacles = environment.get_obstacle_positions()
+        u = np.linspace(0, 2 * np.pi, 12)
+        v = np.linspace(0, np.pi, 8)
+        for obs in obstacles[:30]:  # limit to 30 for readability
+            cx, cy, cz, r = obs[0], obs[1], obs[2], obs[3]
+            xs = cx + r * np.outer(np.cos(u), np.sin(v))
+            ys = cy + r * np.outer(np.sin(u), np.sin(v))
+            zs = cz + r * np.outer(np.ones_like(u), np.cos(v))
+            ax.plot_wireframe(xs, ys, zs, color="gray", alpha=0.15, linewidth=0.3)
+
+    for idx, (drone_id, path) in enumerate(paths_dict.items()):
+        path = np.asarray(path)
+        if path.ndim != 2 or path.shape[0] == 0 or path.shape[1] < 3:
+            continue
+        color = _get_color(idx)
+
+        ax.plot(
+            path[:, 0], path[:, 1], path[:, 2],
+            color=color, linewidth=1.5, alpha=0.8,
+            label=f"Drone {drone_id}",
+        )
+        ax.scatter(*path[0, :3], color="green", s=50, marker="o", zorder=5)
+        ax.scatter(*path[-1, :3], color="red", s=60, marker="X", zorder=5)
+
+    if environment is not None:
+        ax.set_xlim(0, environment.width)
+        ax.set_ylim(0, environment.height)
+        ax.set_zlim(0, environment.depth)
+
+    ax.set_xlabel("X (m)")
+    ax.set_ylabel("Y (m)")
+    ax.set_zlabel("Z (m)")
+    ax.set_title(title)
+    ax.legend(loc="upper right", fontsize=7, ncol=2)
     _save_and_close(fig, save_path)
 
 

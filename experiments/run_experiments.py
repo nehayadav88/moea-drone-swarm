@@ -3,10 +3,12 @@
 MOEA Drone Swarm Path Planning - Experiment Runner
 ====================================================
 Runs multi-objective optimization experiments for heterogeneous drone swarm
-path planning, comparing NSGA-II, MOEA/D, and SPEA2.
+path planning.  Supports both 2-D and 3-D environments and all 11 algorithms
+inspired by PlatEMO.
 
 Usage:
     python -m experiments.run_experiments [--config experiments/configs.yaml] [--quick]
+    python -m experiments.run_experiments --scenario urban_canyon --quick
 """
 
 import sys
@@ -20,11 +22,11 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from simulation.environment import Environment
+from simulation.environment3d import Environment3D
 from simulation.drone import Drone
-from core.problem_definition import DroneSwarmMOP
-from algorithms.nsga2 import NSGA2
-from algorithms.moead import MOEAD
-from algorithms.spea2 import SPEA2
+from simulation.scenarios import create_scenario, list_scenarios
+from core.problem_definition import DroneSwarmMOP, DroneSwarmMOP3D
+from algorithms import ALGORITHM_REGISTRY
 from metrics.hv import compute_hypervolume
 from metrics.igd import compute_igd, compute_gd
 from metrics.diversity import compute_spread, compute_spacing, compute_pure_diversity
@@ -59,8 +61,33 @@ def _drone_to_dict(drone):
     }
 
 
-def setup_problem(config, seed=None):
-    """Create environment, drones, and problem instance."""
+def setup_problem(config, seed=None, scenario_name=None):
+    """Create environment, drones, and problem instance.
+
+    When *scenario_name* is given, a 3-D scenario is created via
+    :func:`create_scenario`.  Otherwise a 2-D environment is built from
+    the ``config['environment']`` settings.
+    """
+    prob_cfg = config['problem']
+
+    if scenario_name:
+        # ---- 3-D scenario mode ----
+        env, drones = create_scenario(scenario_name, seed=seed)
+        drone_dicts = [_drone_to_dict(d) for d in drones]
+        task_positions = [tuple(d.target_position) for d in drones]
+
+        problem = DroneSwarmMOP3D(
+            environment=env,
+            drones=drone_dicts,
+            task_positions=task_positions,
+            config={
+                "num_waypoints_per_drone": prob_cfg['num_waypoints_per_drone'],
+                "safety_distance": prob_cfg.get('safety_distance', 3.0),
+            },
+        )
+        return env, drones, problem
+
+    # ---- 2-D mode (default) ----
     env_cfg = config['environment']
     env = Environment(width=env_cfg['width'], height=env_cfg['height'])
     env.generate_random_obstacles(
@@ -79,7 +106,6 @@ def setup_problem(config, seed=None):
         seed=seed
     )
 
-    prob_cfg = config['problem']
     drone_dicts = [_drone_to_dict(d) for d in drones]
     task_positions = [(d.target_position[0], d.target_position[1]) for d in drones]
 
@@ -147,8 +173,18 @@ def compute_all_metrics(pf_objectives, reference_point, reference_front=None):
     return metrics
 
 
-def run_experiments(config_path, quick=False):
-    """Main experiment loop."""
+def run_experiments(config_path, quick=False, scenario_name=None):
+    """Main experiment loop.
+
+    Parameters
+    ----------
+    config_path : str
+        Path to the YAML configuration file.
+    quick : bool
+        If True, reduce runs and generations for fast smoke-testing.
+    scenario_name : str or None
+        If provided, use a 3-D scenario from :func:`create_scenario`.
+    """
     config = load_config(config_path)
 
     if quick:
@@ -167,11 +203,7 @@ def run_experiments(config_path, quick=False):
 
     reference_point = np.array(config['metrics']['reference_point'])
 
-    algorithm_map = {
-        'nsga2': NSGA2,
-        'moead': MOEAD,
-        'spea2': SPEA2,
-    }
+    algorithm_map = ALGORITHM_REGISTRY
 
     # Results storage
     all_results = {}
@@ -200,7 +232,9 @@ def run_experiments(config_path, quick=False):
             seed = base_seed + run_idx
             print(f"\n--- Run {run_idx + 1}/{n_runs} (seed={seed}) ---")
 
-            env, drones, problem = setup_problem(config, seed=seed)
+            env, drones, problem = setup_problem(
+                config, seed=seed, scenario_name=scenario_name
+            )
 
             result = run_single_experiment(
                 algo_class, problem, algo_config, seed=seed + 1000
@@ -306,7 +340,9 @@ def run_experiments(config_path, quick=False):
     # Drone paths from best solution of last run (using first algorithm)
     first_algo = list(all_results.keys())[0]
     last_result = all_results[first_algo][-1]
-    env, drones, problem = setup_problem(config, seed=base_seed + n_runs - 1)
+    env, drones, problem = setup_problem(
+        config, seed=base_seed + n_runs - 1, scenario_name=scenario_name
+    )
 
     # Decode best solution (first in Pareto front)
     if len(last_result['solutions']) > 0:
@@ -354,6 +390,13 @@ if __name__ == '__main__':
         '--quick', action='store_true',
         help='Run quick experiment with reduced parameters for testing'
     )
+    parser.add_argument(
+        '--scenario', type=str, default=None,
+        choices=list_scenarios(),
+        help='Use a 3-D scenario instead of 2-D config. '
+             f'Available: {", ".join(list_scenarios())}'
+    )
     args = parser.parse_args()
 
-    run_experiments(args.config, quick=args.quick)
+    run_experiments(args.config, quick=args.quick,
+                    scenario_name=args.scenario)
